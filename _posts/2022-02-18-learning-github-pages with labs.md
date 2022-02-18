@@ -43,3 +43,20 @@ or *optional* and the lab instruction doesn't comment on ``theme`` at all until 
 issue with the lab, and after updating the theme *back* to ``theme: minima`` and *patiently* hitting ``Ctrl + F5`` for what felt like a minute; **Success**!!
 * **Formatting transclusion** - finally I learned the format of the ``minima`` theme by trial and error, namely removing the duplicative titles for both the ``index.md`` and each blog post!
 
+## How does it work?
+Github provides an ``onEvent`` style callback mechanism call **[Github Actions](https://docs.github.com/en/actions)** for a [wide range of events](https://docs.github.com/en/actions/using-workflows/events-that-trigger-workflows#available-events) *(e.g. Code is pushed, Issue is Created, etc)*. These are used both for the deployment of Github Pages *and* building the Learning Lab transitions. It's worth taking a peek under the covers of both of these to learn a little more.
+
+### Deployment of the Webserver
+The webserver uses an action on content change to trigger a build and deployment of the static website. It doesn't appear the workflow code for this is held locally, or if it is it's in some form of hidden folder that I haven't worked out how to make visible, but we can gleen a few interesting tidbits:
+* here we can see a [workflow run from the blog update](https://github.com/TheGrimTiffith/github-pages-with-jekyll/actions/runs/1866164169) was triggered by the **githubpages-bot** and took 46 seconds from trigger point to completion. 
+* Given a build time of 19s and a deployment time of 5s, it's unclear where the other 22s went. A reasonable guess is this internal mechanics of the bot and/or Github Actions such that we're witnessing *"polling interval"* and/or *"queuing to be scheduled to build resources"*, however these are very much guesses from experiences with other [Continuous Delivery](https://en.wikipedia.org/wiki/Continuous_delivery) (CD) solutions.
+
+### Github Learning Lab workflow
+Whilst the code isn't directly linked from the Learning Lab workflow *page* - the page name of ``githubtraining/github-pages`` fits the archetype of ``<user|organization>/<respository-name>`` and so, sure enough the code can be found at https://github.com/githubtraining/github-pages/. 
+
+looking at the project we can see the following:
+1. The actions are defined in the [config.yml](https://github.com/githubtraining/github-pages/blob/main/config.yml) file. I was hoping to [use the Actions visualizer](https://docs.github.com/en/actions/monitoring-and-troubleshooting-workflows/using-the-visualization-graph) to look at the flow visually, but [no actions show up for me](https://github.com/githubtraining/github-pages/actions). Given this doesn't follow the [entry level explanation](https://docs.github.com/en/actions/learn-github-actions/understanding-github-actions#understanding-the-workflow-file), but rather starts with step declarations and has a seemingly novel concept of ``before`` I'm expecting there is a common framework shared across all the github training pages.
+2. There are two supported *localizations* of the tutorial; English (EN) and Spanish (ES)
+3. There is no code outside the workflow definition in the config.yml - the [responses folder](https://github.com/githubtraining/github-pages/tree/main/responses) contains a series of response payloads written in markdown, with a subfolder for the spanish language versions. 
+
+From a no/low code perspective this is pretty impressive; 296 lines of Yaml all up! As per #1 though I would suspect there has to be another extension written that's common / re-used for github learning. This is worth some further digging.
