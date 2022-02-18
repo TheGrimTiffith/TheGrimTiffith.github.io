@@ -4,7 +4,7 @@ date: 2022-02-18
 ---
 Despite being in tech for the last 15 years, I've always worked on back-end systems for organizations that didn't *encourage* open source and community participation. 
 As such, on **"Day 5 of 21 between roles"** I wanted to find a place to capture some publically shareable technical thoughts, both on things I'm experienced in as well as 
-those things I'm learning from scratch. 
+those things I'm learning from scratch. This post walks through why I chose Github Pages as the technology, the learning experience and a light inspection of the Github Actions tooling that powers both the static website build and the learning labs.
 
 ## Options I considered for Blogging solutions
 With that in mind, and with no interest in looking for an optimum solution, but rather an acceptible one that I could make a quick *( < 10 minute)* decision on. I looked through a few options:
