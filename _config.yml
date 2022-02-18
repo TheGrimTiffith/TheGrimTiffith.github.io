@@ -1,0 +1,11 @@
+title: The Grim Tiffith
+author: Tim Griffith
+email: tim.griffith.dev@gmail.com
+theme: minima
+description: > # A personal blog site *(hopefully)* to capture some thoughts on the kinds of tech I'm **best** at and the things that I'm learning.
+
+# social links
+twitter_username: TheGrimTiffith
+github_username: TheGrimTiffith
+
+show_excerpts: true # set to false to remove excerpts on the homepage
