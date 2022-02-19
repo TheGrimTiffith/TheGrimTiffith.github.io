@@ -33,7 +33,7 @@ Unfortunately I don't have a good memory allocation profiler handy, but taking a
 
 ![Large retained memory for choices and decisions](https://github.com/TheGrimTiffith/TheGrimTiffith.github.io/blob/main/images/wordle/retained-memory-profile-prior-to-OOM.png?raw=true)
 
-Why is it retaining *so* much memory? well because I made a bone-headed retention mistake of course! The code is structured to recursively evalute all permutations for each *scoring* given the discovered information so far, however once it's done it's search of the child space it doesn't *"take the 'best' result"* - it retains all the options, and then picks the *"best"* on read/access as shown in the following snippet [code permalink](https://github.com/TheGrimTiffith/wordle-tinkering/blob/5c9984c2d5cdfd7187b93b72086a16f58fd0b6d0/src/main/kotlin/com/fafflegriff/wordle/graph/DecisionTree.kt#L141):
+Why is it retaining *so* much memory? well because I made a bone-headed retention mistake of course! The code is structured to recursively evalute all permutations for each *scoring* given the discovered information so far, however once it's done it's search of the child space it doesn't *"take the 'best' result"* - it retains all the options, and then picks the *"best"* on read/access as shown in the following snippet ([full code](https://github.com/TheGrimTiffith/wordle-tinkering/blob/5c9984c2d5cdfd7187b93b72086a16f58fd0b6d0/src/main/kotlin/com/fafflegriff/wordle/graph/DecisionTree.kt#L141)):
 
 ```kotlin
 private class ChoiceNode(choices : List<DecisionNode>) {
