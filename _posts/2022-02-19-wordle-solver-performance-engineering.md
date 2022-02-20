@@ -63,3 +63,56 @@ We are effectively repeating the same useful information 3 times; there is no me
 that need to be evaluated.
 
 To fix this? only retain the best choice - further than removes the need for the intermediate choice tree structure itself. This means we have a datastructure of ``DecisionNode`` representing the *player* optimal choice which will have up to 243 ``scoringTransitions`` representing the *game* providing a scoring of players guess vs the hidden word. [Removing the ChoiceNode](https://github.com/TheGrimTiffith/wordle-tinkering/commit/32af75ca608851c4ef430b4af4a58aab3d261b05) and the retention of all evaluated choices in memory, did indeed solve the immediate onset memory leak. So now we can start looking at making the code go faster.
+
+## Building in speed measurement
+Before we can even *start* doing the performance optimization, we need a good measure of the solver performance itself. After fixing the memory issue, the decision tree generator just *"runs for hours"*. This isn't particularly useful for operating closed loop performance improvement, so we're going to need to build a more scalable mechanism. Sonorous Chocolate's initial approach was to do a *non-exhaustive* search and to constrain the search to expanding the **Best N** at each choice. This way the solver can trade of *precision* for *processing time* and we can start to move towards an equal comparison of measurement.
+
+So, how do we add in constraint to N best *prior* to evaluating them? [3Blue1Brown](https://www.youtube.com/channel/UCYO_jab_esuFRV4b17AJtAw)'s previously mentioned YouTube video had a great illustration of the distribution of results being ranked by the average *information* across all possible word scorings from the candidate guess word. It's a nice easy calculation to code up:
+
+```kotlin
+            for (transition in transitions.values) {
+                val probability: Double = transition.size.toDouble() / doubleSum
+                val information = log2(1/probability)
+                averageInformation += probability * information
+            }
+            this.averageInformation = averageInformation
+```
+Introducing to the candidate generation code was done by splitting the candidate generation from the recursive build of the decision node, so the candidates could be sorted and
+truncated to the Best N guesses to expand:
+
+```kotlin
+        // order choices and filter to best N candidates
+        val filteredCandidates = if (candidates.size > maxCandidatesToConsider) {
+            candidates.sortDescending()
+            candidates.take(maxCandidatesToConsider)
+        } else candidates
+
+        // now recurse and build the deep inspection for each of the candidates
+        val choices = filteredCandidates.map { buildDecisionNode(it.choice, it.transitions, similarityClusters) }
+```
+
+So, how are we doing performance wise? Well, many orders of magnitude off the state-of-the-art! 
+
+| Max Candidates (N) | Best Start word | Guesses (SUM) | Guesses (AVG) | calculation time (ms) |
+|---|---|---|---|---|
+| 1 | raise | 8334 | 3.6 | 1921
+| 2 | slate | 8158 | 3.523974082073434 | 1896
+| 3 | slate | 8158 | 3.523974082073434 | 2238
+| 4 | slate | 8157 | 3.5235421166306695 | 2974
+| 5 | trace | 8153 | 3.521814254859611 | 4320
+| 6 | trace | 8152 | 3.5213822894168465 | 7104
+| 7 | trace | 8152 | 3.5213822894168465 | 12254
+| 8 | trace | 8152 | 3.5213822894168465 | 20867
+| 9 | trace | 8151 | 3.5209503239740823 | 33401
+| 10 | trace | 8151 | 3.5209503239740823 | 51668
+| 11 | trace | 8151 | 3.5209503239740823 | 73564
+| 12 | trace | 8150 | 3.5205183585313176 | 103856
+
+~104 seconds to do only the expansion on N = 12, that's a very *very* long way from the N = 25 in 17s and N = 50 in 40s! We have a lot of work to do, but thankfully we have
+a baseline :)
+
+## More is less? expanding the dictionary, for speed gains?
+We now have a measurement baseline and are coming up with the #3 equal best word, ``TRACE``, we're not only *non-functionally* deficient, we are also *functionally* deficient.
+Specifically we're not coming up with the correct best word, ``SALET`` or the runner up ``REAST`` - further we're very significantly off the proven SUM of guesses for TRACE; 
+we've whittled down to **8150**, but that's far in excess of the correct **7926**. This is because we aren't using the full acceptible world dictionary, we're just using the
+*hidden word* file.
