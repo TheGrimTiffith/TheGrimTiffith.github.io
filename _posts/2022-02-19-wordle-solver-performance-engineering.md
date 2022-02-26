@@ -111,8 +111,37 @@ So, how are we doing performance wise? Well, many orders of magnitude off the st
 ~104 seconds to do only the expansion on N = 12, that's a very *very* long way from the N = 25 in 17s and N = 50 in 40s! We have a lot of work to do, but thankfully we have
 a baseline :)
 
-## More is less? expanding the dictionary, for speed gains?
+## Slow is Smooth, Smooth is Fast? Expanding the Dictionary
 We now have a measurement baseline and are coming up with the #3 equal best word, ``TRACE``, we're not only *non-functionally* deficient, we are also *functionally* deficient.
 Specifically we're not coming up with the correct best word, ``SALET`` or the runner up ``REAST`` - further we're very significantly off the proven SUM of guesses for TRACE; 
-we've whittled down to **8150**, but that's far in excess of the correct **7926**. This is because we aren't using the full acceptible world dictionary, we're just using the
-*hidden word* file.
+we've whittled down to **8150**, but that's far in excess of the correct **7926**. This is because we aren't using the full acceptible word dictionary, we're just using the
+*hidden word* answers file. In order to ensure we can get to the optimal guessing strategy, we need to be able to expand guess words beyond the list of answer words. This is a
+relatively small change to the codebase, at least to do the naieve expansion:
+1. change the precalculated matrix from being N x N, where N = 2315 hidden words, to M x N, where M = 12,953 input words.
+2. pass the available guesswords list seperate from the remaining candidates list, available guesswords is kept at the full set of viable choices at any given decision, which is significantly wider than the set of remaining valid answer words.
+
+Unfortunately, and perhaps unsurprisingly, this makes the processing even slower than before:
+
+| Max Candidates (N) | Best Start word | Guesses (SUM) | Guesses (AVG) | calculation time (ms) |
+|---|---|---|---|---|
+| 1 | soare | 10070 | 3.4892584892584892 | 101490
+| 2 | soare | 9948 | 3.4905263157894737 | 375036
+| 3 | soare | 9881 | 3.486591390261115 | 88314
+
+## Fixing the sort-merge inefficiency
+when looking under the covers we can see that the time is dominated by the ``intersectSortedLists`` method and within that the vast majority of the time is spent *resizing* the internal array, as shown in the profile flame graph below:
+
+![profile showing slow intersect sorted lists method](https://github.com/TheGrimTiffith/TheGrimTiffith.github.io/blob/main/images/wordle/profile-showing-slow-set-intersection.png?raw=true)
+
+Whilst we could work through how to ensure the Kotlin ``ArrayList`` is instantiated to the correct length, or we could rewrite to use ``ShortArray`` types and pass a used length there is a significantly faster structure we can use, albeit at the cost of a little more memory, a ``BitSet``. Consider we only have 2,315 valid answer words, and we've already
+encoded then with integer ordinals. As such rather than having a dense List<Short>, where we use 2 bytes to encode each intersection candidate, we can use 2,315 bits *(290 bytes)* to store the entire sparse incidence graph, and then run 37 consectutive 64 bit AND operations to conduct the intersection operations. We don't even have to write the logic ourselves as Kotlin has a helpful [BitSet](https://github.com/JetBrains/kotlin/blob/6a670dc5f38fc73eb01d754d8f7c158ae0176ceb/kotlin-native/runtime/src/main/kotlin/kotlin/native/BitSet.kt) SDK class:
+        
+        
+
+
+
+
+
+
+
+
