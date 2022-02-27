@@ -126,22 +126,35 @@ Unfortunately, and perhaps unsurprisingly, this makes the processing even slower
 |---|---|---|---|---|
 | 1 | soare | 10070 | 3.4892584892584892 | 101490
 | 2 | soare | 9948 | 3.4905263157894737 | 375036
-| 3 | soare | 9881 | 3.486591390261115 | 88314
+| 3 | soare | 9881 | 3.486591390261115 | 883140
 
 ## Fixing the sort-merge inefficiency
 when looking under the covers we can see that the time is dominated by the ``intersectSortedLists`` method and within that the vast majority of the time is spent *resizing* the internal array, as shown in the profile flame graph below:
 
-![profile showing slow intersect sorted lists method](https://github.com/TheGrimTiffith/TheGrimTiffith.github.io/blob/main/images/wordle/profile-showing-slow-set-intersection.png?raw=true)
+![profile showing slow intersect sorted lists method](https://github.com/TheGrimTiffith/TheGrimTiffith.github.io/blob/main/images/wordle/profile-showing-slow-set-intersection-2.png?raw=true)
 
 Whilst we could work through how to ensure the Kotlin ``ArrayList`` is instantiated to the correct length, or we could rewrite to use ``ShortArray`` types and pass a used length there is a significantly faster structure we can use, albeit at the cost of a little more memory, a ``BitSet``. Consider we only have 2,315 valid answer words, and we've already
-encoded then with integer ordinals. As such rather than having a dense List<Short>, where we use 2 bytes to encode each intersection candidate, we can use 2,315 bits *(290 bytes)* to store the entire sparse incidence graph, and then run 37 consectutive 64 bit AND operations to conduct the intersection operations. We don't even have to write the logic ourselves as Kotlin has a helpful [BitSet](https://github.com/JetBrains/kotlin/blob/6a670dc5f38fc73eb01d754d8f7c158ae0176ceb/kotlin-native/runtime/src/main/kotlin/kotlin/native/BitSet.kt) SDK class:
+encoded then with integer ordinals. As such rather than having a dense List<Short>, where we use 2 bytes to encode each intersection candidate, we can use 2,315 bits *(290 bytes)* to store the entire sparse incidence graph, and then run 37 consectutive 64 bit AND operations to conduct the intersection operations. We don't even have to write the logic ourselves as Java has a helpful [BitSet](https://docs.oracle.com/en/java/javase/11/docs/api/java.base/java/util/BitSet.html?is-external=true) SDK class which we can make use of. The core of the code changes include removing the manual intersect sorted list and adding calls to check the bitsets cardinality, which unfortunately require full re-evaluation of the whole BitSet to count the number of set bits:
         
+```kotlin
+val validPossibilities = remainingPossibilities.clone() as BitSet
+validPossibilities.and(it.value)
+val isEmpty = -1 == validPossibilities.nextSetBit(0)
+if (validPossibilities.cardinality() < it.value.cardinality()) {
+    reducedCount++
+}                
+```
+
+The result was a reasonable linear improvement in performance, however still increadibly slow: 
+
+| Max Candidates (N) | Best Start word | Guesses (SUM) | Guesses (AVG) | calculation time (ms) |
+|---|---|---|---|---|
+| 1 | soare | 10070 | 3.4892584892584892 | 62362
+| 2 | soare | 9948 | 3.4905263157894737 | 242035
+| 3 | soare | 9881 | 3.486591390261115 | 582068
+
+it's clear here that linear performance improvement isn't going to cut it, rather we'll need to look towards algorthimic solutions, for which code profiling won't help. There is some low hanging fruit on the linear performance worth going after still, as the profile clearly shows:
+
+![Profile shows LinkedHashSet Overheads](https://github.com/TheGrimTiffith/TheGrimTiffith.github.io/blob/main/images/wordle/profile-showing-overheads-after-bitset-change.png?raw=true)
         
-
-
-
-
-
-
-
-
+This is still worth the short cleanup effort before starting on the algorithmic approaches in order to see if we can speed up some of our algorithm development/test cycles.        
