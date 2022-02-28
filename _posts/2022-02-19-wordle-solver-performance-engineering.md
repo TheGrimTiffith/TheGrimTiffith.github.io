@@ -161,10 +161,11 @@ This is still worth the short cleanup effort before starting on the algorithmic 
 
 | Max Candidates (N) | Best Start word | Guesses (SUM) | Guesses (AVG) | calculation time (ms) |
 |---|---|---|---|---|
-| 1 | soare | 10070 | 3.4892584892584892 | 47718
-| 2 | soare | 9948 | 3.4905263157894737 | 196977
-| 3 | soare | 9881 | 3.486591390261115 | 469329
-| 4 | raile | 9807 | 3.4739638682252925 | 915945
+| 1 | soare | 10070 | 3.4892584892584892 | 48722
+| 2 | soare | 9948 | 3.4905263157894737 | 190235
+| 3 | soare | 9881 | 3.486591390261115 | 459819
+| 4 | raile | 9807 | 3.4739638682252925 | 879978
+| 5 | reast | 9654 | 3.444166963967178 | 1492990
                                                               
 ## Removing redundant work
 The current algorithm has a series of considerations that are highly wasteful that we can look into:
@@ -195,3 +196,10 @@ private fun buildChoice(availableChoices: List<Short>, remainingPossibilities: B
 |6 | 270 | 3497310 | 12953|
         
 **Oops!** it appears we're not filtering our candidates **at all**, so we're considering all words at all stages, even if they provide no useful information on a branch - which *should* be the case. For instance if the word SALET produces a ``-----`` response then it's anogram, ``TALES``, should also be eliminated as it can provide no useful information underneath the ``-----`` branch... yet this isn't happening. Further we can confirm that at this stage, the optimization to truncate depth isn't going to be useful. So it makes sense to look at candidate pruning, then move into sub-tree memoization.
+                                                              
+### candidate pruning
+The number of candidates being considered should be declining rapidly as the choice depth increases. The code attempts to ensure that only choices that perform a *reduction* in the total remaining words will be considered, however this is flawed given that unless the choice is one of the hidden words, a reduction won't be achieved so much as a partitioning of the remaining words across the possible answers. As such what we're looking for is candidate words that won't add any *value*, these include those that:
+1. **don't change the distribution** - of answers at all (i.e. have the same distribution of transitions) - this is going to be true for repeating the guess words and in some situations anagrams.
+2. have **no useful information** - e.g. those that are *disjoint* to all remaining results, and so consistentently transition (a mono-transition) for all remaining answers, such as ``-----``
+                                                              
+In most situations choices will have *some* value, but not very much - meaning they can't be fully eliminated.
