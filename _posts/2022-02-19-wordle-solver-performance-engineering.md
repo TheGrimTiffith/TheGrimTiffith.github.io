@@ -157,4 +157,16 @@ it's clear here that linear performance improvement isn't going to cut it, rathe
 
 ![Profile shows LinkedHashSet Overheads](https://github.com/TheGrimTiffith/TheGrimTiffith.github.io/blob/main/images/wordle/profile-showing-overheads-after-bitset-change.png?raw=true)
         
-This is still worth the short cleanup effort before starting on the algorithmic approaches in order to see if we can speed up some of our algorithm development/test cycles.        
+This is still worth the short cleanup effort before starting on the algorithmic approaches in order to see if we can speed up some of our algorithm development/test cycles. The fix here being to use appropriate datastructures for what we *need*, in particular not using a ``LinkedHashMap`` datastructure but electing purely for Lists or better yet Arrays in order to reduce the access and iteration boilerplate. Removing the unnecessary Maps or deferring them to where they are *actually* useful gives another moderate speedup:
+
+| Max Candidates (N) | Best Start word | Guesses (SUM) | Guesses (AVG) | calculation time (ms) |
+|---|---|---|---|---|
+| 1 | soare | 10070 | 3.4892584892584892 | 47718
+| 2 | soare | 9948 | 3.4905263157894737 | 196977
+| 3 | soare | 9881 | 3.486591390261115 | 469329
+                                                              
+## Removing redundant work
+The current algorithm has a series of considerations that are highly wasteful that we can look into:
+1. **Deep scoring all candidates** - requires doing a full intersection of all branches prior to recursively ordering and building. This is why the cost for N=1 is still so increadibly high; as even though it's only *recursively expanding* the best choice; it's still **ranking** all available choices which in turn requires doing the intersection between the remaining possible words and the candidate words for each transition branch. The pruning of candidate words is also likely not aggressive enough, given it's only removing words that provided no additional information on *any* branch. Evaluating how we filter candidates at each level to remove more aggressively, earlier should help linear performance.
+2. **Recalculating Path Permutations** - We will be recalculating a very significant number of branches due to permutations; for instance ADIEU -> SPACE will have the same sub-graph as SPACE -> ADIEU. As currently stands we're treating as a shared nothing Tree, rather than a Directed Acyclic Graph (DAG) and so recalculating all permutations irrespective of occurance. NOTE: this isn't saying that the order of the choices doesn't matter; it absolutely does. It's simply stating that once the node is reached, the sub-graph will be the same.
+3. **Evaluating losses** - as the game cannot be *won* with more than 6 guesses, and we know that the game can always be completed within 6 guesses - we can fast fail any branches that exceed a depth of 6 rather than fully evaluating.
