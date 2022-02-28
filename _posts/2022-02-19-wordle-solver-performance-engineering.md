@@ -164,9 +164,34 @@ This is still worth the short cleanup effort before starting on the algorithmic 
 | 1 | soare | 10070 | 3.4892584892584892 | 47718
 | 2 | soare | 9948 | 3.4905263157894737 | 196977
 | 3 | soare | 9881 | 3.486591390261115 | 469329
+| 4 | raile | 9807 | 3.4739638682252925 | 915945
                                                               
 ## Removing redundant work
 The current algorithm has a series of considerations that are highly wasteful that we can look into:
 1. **Deep scoring all candidates** - requires doing a full intersection of all branches prior to recursively ordering and building. This is why the cost for N=1 is still so increadibly high; as even though it's only *recursively expanding* the best choice; it's still **ranking** all available choices which in turn requires doing the intersection between the remaining possible words and the candidate words for each transition branch. The pruning of candidate words is also likely not aggressive enough, given it's only removing words that provided no additional information on *any* branch. Evaluating how we filter candidates at each level to remove more aggressively, earlier should help linear performance.
 2. **Recalculating Path Permutations** - We will be recalculating a very significant number of branches due to permutations; for instance ADIEU -> SPACE will have the same sub-graph as SPACE -> ADIEU. As currently stands we're treating as a shared nothing Tree, rather than a Directed Acyclic Graph (DAG) and so recalculating all permutations irrespective of occurance. NOTE: this isn't saying that the order of the choices doesn't matter; it absolutely does. It's simply stating that once the node is reached, the sub-graph will be the same.
 3. **Evaluating losses** - as the game cannot be *won* with more than 6 guesses, and we know that the game can always be completed within 6 guesses - we can fast fail any branches that exceed a depth of 6 rather than fully evaluating.
+        
+Looking at the current execution profile:        
+        
+![profile showing greatest cost is at depth=3](https://github.com/TheGrimTiffith/TheGrimTiffith.github.io/blob/main/images/wordle/costs-per-recursion-depth.png?raw=true)
+
+the biggest area of cost is expanding the permutations at a choice depth of 3. This isn't surprising as we're focusing on likely best and are producing a average guess depth between 3 and 4 and would expect the viable candidates list to be greatly reduced form depth to depth 4, in fact we can quickly instrument our code to confirm this information:
+
+```kotlin
+private fun buildChoice(availableChoices: List<Short>, remainingPossibilities: BitSet, depth: Int, candidateCount: Int) : DecisionNode {
+        val depthIdx = depth - 1
+        sumCandidatesByDepth[depthIdx] = sumCandidatesByDepth[depthIdx] + availableChoices.size.toLong()
+        countCandidatesByDepth[depthIdx] = countCandidatesByDepth[depthIdx] + 1        
+```    
+
+| Depth | Invocations (N) | Candidates (SUM) | Candidates (AVG) |
+|---|---|---|---|
+|1 | 1 | 12953 | 12953|
+|2 | 384 | 4973952 | 12953|
+|3 | 11446 | 148260038 | 12953|
+|4 | 37299 | 483133947 | 12953|
+|5 | 9159 | 118636527 | 12953|
+|6 | 270 | 3497310 | 12953|
+        
+**Oops!** it appears we're not filtering our candidates **at all**, so we're considering all words at all stages, even if they provide no useful information on a branch - which *should* be the case. For instance if the word SALET produces a ``-----`` response then it's anogram, ``TALES``, should also be eliminated as it can provide no useful information underneath the ``-----`` branch... yet this isn't happening. Further we can confirm that at this stage, the optimization to truncate depth isn't going to be useful. So it makes sense to look at candidate pruning, then move into sub-tree memoization.
